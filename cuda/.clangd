@@ -1,0 +1,11 @@
+If:
+  PathMatch: .*cu$
+
+CompileFlags:
+  Add:
+    - -xcuda
+    - -std=c++17
+    - -I/home/sijirama/Desktop/me/coder/impls/.cuda-stubs
+    - --cuda-host-only
+    - -nocudainc
+    - -nocudalib
