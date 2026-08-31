@@ -1,2 +1,13 @@
 
 *.exe
+
+# Manim virtual environment and Python caches
+manim/.venv/
+manim/__pycache__/
+manim/**/*.pyc
+
+# Manim-generated render artifacts; keep finished videos placed directly in media/
+media/videos/
+media/images/
+media/texts/
+media/Tex/
