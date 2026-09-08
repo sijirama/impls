@@ -1,7 +1,7 @@
 #include <cuda_runtime.h>
 #include <math.h>
 
-__device__ float silu_kernel(float input) { return 1 / (1 + exp(-input)); }
+__device__ float silu_kernel(float input) { return input / (1 + exp(-input)); }
 
 __global__ void swiglu_kernel(const float *input, float *output, int halfN) {
 
