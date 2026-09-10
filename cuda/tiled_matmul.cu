@@ -16,17 +16,22 @@ __global__ void tiled_matmul(const float *A, const float *B, float *C, int M,
 
     for (int phase = 0; phase < K / TILE_WIDTH; phase++) {
 
-        A_shared[threadIdx.y][threadIdx.x] = A[row * K + col];
-        B_shared[threadIdx.y][threadIdx.x] = B[col * K + row];
+        // A = M x K | row x A_col
+        int A_col = phase * TILE_WIDTH + threadIdx.x;
+        A_shared[threadIdx.y][threadIdx.x] = A[row * K + A_col];
+
+        // B = K x N | B_row x col
+        int B_row = phase * TILE_WIDTH + threadIdx.y;
+        B_shared[threadIdx.y][threadIdx.x] = B[B_row * N + col];
 
         __syncthreads();
 
-        for (int k = 0; k < K; k++) {
-            sum += A_shared[threadIdx.x][k] * B_shared[k][threadIdx.y];
+        for (int k = 0; k < TILE_WIDTH; k++) {
+            sum += A_shared[threadIdx.y][k] * B_shared[k][threadIdx.x];
         }
 
         __syncthreads();
     }
 
-    C[row * K + col] = sum;
+    C[row * N + col] = sum;
 }
