@@ -9,7 +9,7 @@ __global__ void matmul(const float *A, const float *B, float *C, int M, int N,
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (row > M || col > N)
+    if (row >= M || col >= N)
         return;
 
     float sum = 0.0f;
@@ -17,7 +17,7 @@ __global__ void matmul(const float *A, const float *B, float *C, int M, int N,
         sum += A[row * K + k] * B[k * N + col];
     }
 
-    C[row * N + col] = shouldSqrt ? sqrtf(sum) : sum;
+    C[row * N + col] = shouldSqrt ? sum / sqrtf(K) : sum;
 }
 
 __global__ void transpose(float *output, const float *K, int N, int d) {
@@ -26,7 +26,7 @@ __global__ void transpose(float *output, const float *K, int N, int d) {
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (x < d && y < N) {
-        output[y * N + x] = K[x * d + y];
+        output[x * N + y] = K[y * d + x];
     }
 }
 
@@ -94,7 +94,7 @@ __global__ void row_wise_softmax_kernel(const float *__restrict__ input,
         local_sum += expf(row_in[col] - row_max);
     }
 
-    local_sum = warpReduceMax(local_sum);
+    local_sum = warpReduceSum(local_sum);
 
     if (lane == 0)
         shared_mem[warp_id] = local_sum;
@@ -145,9 +145,9 @@ extern "C" void solve(const float *Q, const float *K, const float *V,
     // A (M * N) = Q (M * d) @ K_t (d * N) // MNK <=> MNd
     // el division by d ** 0.5 included
     dim3 threadsPerBlockMMA(16, 16);
-    int numBlocksMMAX = (M + threadsPerBlockMMA.x - 1) / threadsPerBlockMMA.x;
-    int numBlocksMMAY = (N + threadsPerBlockMMA.y - 1) / threadsPerBlockMMA.y;
-    dim3 numBlocksMMA(numBlocksX, numBlocksY);
+    int numBlocksMMAX = (N + threadsPerBlockMMA.x - 1) / threadsPerBlockMMA.x;
+    int numBlocksMMAY = (M + threadsPerBlockMMA.y - 1) / threadsPerBlockMMA.y;
+    dim3 numBlocksMMA(numBlocksMMAX, numBlocksMMAY);
     matmul<<<numBlocksMMA, threadsPerBlockMMA>>>(Q, K_t, A, M, N, d, true);
 
     cudaDeviceSynchronize();
@@ -159,7 +159,7 @@ extern "C" void solve(const float *Q, const float *K, const float *V,
 
     // softmax kernel from A into O pls
     int threadsPerBlockSoftmax = 256;
-    int sizeOfBytesSharedMem = (threadsPerBlockSoftmax / 32) & sizeof(float);
+    int sizeOfBytesSharedMem = (threadsPerBlockSoftmax / 32) * sizeof(float);
     row_wise_softmax_kernel<<<M, threadsPerBlockSoftmax,
                               sizeOfBytesSharedMem>>>(A, O, N);
 
@@ -167,7 +167,17 @@ extern "C" void solve(const float *Q, const float *K, const float *V,
 
     // matmul between A and v
     // output ( M * d) = O ( M * N ) * V ( N * d) // MdN
-    matmul(O, V, output, M, d, N, false);
+    dim3 threadsPerBlockFinal(16, 16);
+    int numBlocksFinalX =
+        (d + threadsPerBlockFinal.x - 1) / threadsPerBlockFinal.x;
+    int numBlocksFinalY =
+        (M + threadsPerBlockFinal.y - 1) / threadsPerBlockFinal.y;
+    dim3 numBlocksFinal(numBlocksFinalX, numBlocksFinalY);
+    matmul<<<numBlocksFinal, threadsPerBlockFinal>>>(O, V, output,
+                                                     M, // output rows
+                                                     d, // output cols
+                                                     N, // reduction dimension
+                                                     false);
 
     cudaDeviceSynchronize();
 }
