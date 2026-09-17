@@ -5,13 +5,4 @@ CompileFlags:
   Add:
     - -xcuda
     - -std=c++17
-    - -I/home/sijirama/Desktop/me/coder/impls/.cuda-stubs
-    - -include/home/sijirama/Desktop/me/coder/impls/.cuda-stubs/cuda_runtime.h
-    - --cuda-host-only
-    - -nocudainc
-    - -nocudalib
-
-Diagnostics:
-  Suppress:
-    - kern_call_not_global_function
-    - ref_bad_target
+    - --cuda-path=/usr/local/cuda-13.4
